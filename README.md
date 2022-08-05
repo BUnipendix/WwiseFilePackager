@@ -1,0 +1,2 @@
+# WwiseFilePackager
+一个用于读取wwise的PCK文件的python脚本
