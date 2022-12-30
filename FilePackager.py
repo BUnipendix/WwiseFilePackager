@@ -2,7 +2,6 @@ import os
 from struct import Struct, unpack, pack
 from io import BytesIO
 from re import compile as re_compile
-from aiohttp import ClientSession
 UNICODE_STRING = 2
 ASCII_STRING = 1
 FILL_PATTERN = b'\xFF'
@@ -186,7 +185,7 @@ class AsyncNetworkPackage(Package):
 
 	def __init__(self, session: ClientSession = None):
 		if not session:
-			self.session = ClientSession(skip_auto_headers=('User-Agent',))
+			self.session = self.ClientSession(skip_auto_headers=('User-Agent',))
 		else:
 			self.session = session
 		super().__init__()
@@ -200,7 +199,7 @@ class AsyncNetworkPackage(Package):
 			raise PackageFormatError
 		# 解包偏移参数
 		header_size, pck_version, languages_size, sbtitles_size, sbfiles_size, streamfiles_size\
-			= unpack('<6I',await fobj.content.read(24))
+			= unpack('<6I', await fobj.content.read(24))
 		if pck_version != 1:
 			if self._log:
 				self._log.logging(r'包版本：' + str(pck_version))
@@ -338,7 +337,6 @@ def build_pck_file(class_obj, fobj, language_def):
 		base_count = (5, 5, 6)[mode]
 		files_size = 0
 		smap = class_obj.map[mode]
-		file_info = class_obj.index_set
 		lang_id = list(smap.keys())
 		for single_lang in lang_id:
 			lang_map = smap[single_lang]
@@ -354,7 +352,7 @@ def build_pck_file(class_obj, fobj, language_def):
 				except KeyError:
 					hash_data[i] = {single_lang: info}
 
-		return size * 4, lang_id, sorted(hash_data.items(), key=lambda d: d[0]), file_info, files_size
+		return size * 4, lang_id, sorted(hash_data.items(), key=lambda d: d[0]), files_size
 
 	def build_file_map(mode, map_data, init_offset):
 		if mode:
@@ -381,9 +379,9 @@ def build_pck_file(class_obj, fobj, language_def):
 
 		return file_list
 
-	def write_audio_data(file_list, file_handles):
+	def write_audio_data(file_list):
 		for package_id, file_size, origin_offset, fill_bytes in file_list:
-			file = file_handles[package_id]
+			file = class_obj.file_list[package_id]
 			file.seek(origin_offset, 0)
 			fobj.write(file.read(file_size))
 			if fill_bytes:
@@ -394,9 +392,9 @@ def build_pck_file(class_obj, fobj, language_def):
 	fobj.write(b'AKPK')  # 文件magic
 
 	# 预处理计算数据
-	bt_size, bt_langid, bt_hash, bt_file, bt_file_size = pre_calculate_files_info(0, True)
-	bf_size, bf_langid, bf_hash, bf_file, bf_file_size = pre_calculate_files_info(1, True)
-	sf_size, sf_langid, sf_hash, sf_file, _ = pre_calculate_files_info(2, True)
+	bt_size, bt_langid, bt_hash, bt_file_size = pre_calculate_files_info(0, True)
+	bf_size, bf_langid, bf_hash, bf_file_size = pre_calculate_files_info(1, True)
+	sf_size, sf_langid, sf_hash, _ = pre_calculate_files_info(2, True)
 
 	# 构造LanguageMap
 	langid = list(set(bt_langid + bf_langid + sf_langid))
@@ -426,10 +424,7 @@ def build_pck_file(class_obj, fobj, language_def):
 	del sf_hash
 
 	# 写入音频文件数据
-	write_audio_data(bt_file_write_info, bt_file)
-	write_audio_data(bf_file_write_info, bf_file)
-	write_audio_data(sf_file_write_info, sf_file)
-
-
-
+	write_audio_data(bt_file_write_info)
+	write_audio_data(bf_file_write_info)
+	write_audio_data(sf_file_write_info)
 
